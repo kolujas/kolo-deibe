@@ -148,9 +148,6 @@ button, input, textarea, select { font: inherit; color: inherit; }
 }
 .aviso.error { border-color: var(--brasa); color: var(--brasa); }
 
-.pie { padding-block: 0 3rem; }
-.pie .filtro { opacity: .6; }
-.pie .filtro:hover { opacity: 1; }
 .pasos { margin: 0; padding-left: 1.3rem; display: grid; gap: .5rem; color: var(--bruma); }
 .pasos b { color: var(--luna); font-weight: 400; }
 
@@ -185,10 +182,6 @@ button, input, textarea, select { font: inherit; color: inherit; }
     </div>
   </div></div>
 </main>
-
-<footer class="pie envoltura"><div class="columna">
-  <button class="filtro" id="acceso-link" type="button">Acceso del autor</button>
-</div></footer>
 
 <!-- lectura -->
 <section class="velo lectura" id="lectura" hidden aria-modal="true" role="dialog" aria-labelledby="lec-titulo">
@@ -466,7 +459,6 @@ button, input, textarea, select { font: inherit; color: inherit; }
 
   function renderModo() {
     $("barra-autor").hidden = !puedeEscribir;
-    $("acceso-link").hidden = puedeEscribir;
   }
 
   /* ——— lectura ——— */
@@ -630,8 +622,14 @@ button, input, textarea, select { font: inherit; color: inherit; }
     try { const r = await gh("", {}, clave); return r.permissions?.push ? "ok" : "sin-permiso"; }
     catch (e) { return e.status === 401 || e.status === 403 || e.status === 404 ? "invalida" : "sin-red"; }
   }
-  $("acceso-link").onclick = () => { $("ac-clave").value = ""; $("ac-estado").textContent = ""; abrirVelo("acceso"); $("ac-clave").focus(); };
-  $("ac-cerrar").onclick = () => cerrarVelo("acceso");
+  // el acceso no tiene link en la página: se entra con la dirección terminada en #autor
+  function abrirAcceso() {
+    if (puedeEscribir) { history.replaceState(null, "", location.pathname + location.search); return; }
+    $("ac-clave").value = ""; $("ac-estado").textContent = ""; abrirVelo("acceso"); $("ac-clave").focus();
+  }
+  function cerrarAcceso() { cerrarVelo("acceso"); history.replaceState(null, "", location.pathname + location.search); }
+  addEventListener("hashchange", () => { if (location.hash === "#autor") abrirAcceso(); });
+  $("ac-cerrar").onclick = cerrarAcceso;
   $("ac-form").onsubmit = async (ev) => {
     ev.preventDefault();
     const clave = $("ac-clave").value.trim(); if (!clave) return;
@@ -643,7 +641,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
       return;
     }
     token = clave; guardarLocal("kolo-token", clave); puedeEscribir = true;
-    cerrarVelo("acceso"); renderModo(); avisar("Listo, ya podés escribir");
+    cerrarAcceso(); renderModo(); avisar("Listo, ya podés escribir");
     await cargar();
   };
   $("btn-salir").onclick = () => {
@@ -655,7 +653,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
     if (ev.key !== "Escape") return;
     if (!$("lectura").hidden) cerrarLectura();
     else if (!$("perfil").hidden) cerrarVelo("perfil");
-    else if (!$("acceso").hidden) cerrarVelo("acceso");
+    else if (!$("acceso").hidden) cerrarAcceso();
   });
 
   /* ——— datos ——— */
@@ -683,6 +681,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
       if (r === "invalida" || r === "sin-permiso") { token = null; borrarLocal("kolo-token"); }
     }
     renderModo();
+    if (location.hash === "#autor") abrirAcceso();
     await cargar();
   })();
 

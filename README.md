@@ -23,7 +23,8 @@ Se publica en **https://kolujas.github.io/kolo-deibe/** con GitHub Pages. No tie
 
 ## Cómo se publica
 
-Cualquiera puede leer. Para escribir, abajo de todo está **Acceso del autor**: ahí se pega una clave de
+Cualquiera puede leer. Para escribir se entra a **https://kolujas.github.io/kolo-deibe/#autor**
+(la página no tiene link a esa pantalla) y se pega una clave de
 GitHub (fine-grained token) con permiso **Contents: Read and write** solo sobre este repo. La clave queda
 guardada en ese navegador y nada más.
 
