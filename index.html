@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Kolo Deibe</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Spectral:ital,wght@0,300;0,400;1,300;1,400&family=IBM+Plex+Mono:wght@400&display=swap">
 <style>
@@ -149,6 +148,12 @@ button, input, textarea, select { font: inherit; color: inherit; }
 }
 .aviso.error { border-color: var(--brasa); color: var(--brasa); }
 
+.pie { padding-block: 0 3rem; }
+.pie .filtro { opacity: .6; }
+.pie .filtro:hover { opacity: 1; }
+.pasos { margin: 0; padding-left: 1.3rem; display: grid; gap: .5rem; color: var(--bruma); }
+.pasos b { color: var(--luna); font-weight: 400; }
+
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -165,6 +170,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
     <div class="barra-autor" id="barra-autor" hidden>
       <button class="boton principal" id="btn-escribir" type="button">Escribir</button>
       <button class="boton" id="btn-perfil" type="button">Editar portada</button>
+      <button class="boton peligro" id="btn-salir" type="button">Salir</button>
     </div>
   </div></div>
 </header>
@@ -179,6 +185,10 @@ button, input, textarea, select { font: inherit; color: inherit; }
     </div>
   </div></div>
 </main>
+
+<footer class="pie envoltura"><div class="columna">
+  <button class="filtro" id="acceso-link" type="button">Acceso del autor</button>
+</div></footer>
 
 <!-- lectura -->
 <section class="velo lectura" id="lectura" hidden aria-modal="true" role="dialog" aria-labelledby="lec-titulo">
@@ -229,7 +239,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
         </div>
       </div>
       <div class="campo">
-        <label for="ed-imagen">Imagen de portada (opcional)</label>
+        <label for="ed-imagen">Imagen de portada (opcional, se achica a 1600 px)</label>
         <div class="vista-imagen">
           <img id="ed-vista" alt="" hidden>
           <input type="file" id="ed-imagen" accept="image/*">
@@ -279,36 +289,124 @@ button, input, textarea, select { font: inherit; color: inherit; }
   </div></div>
 </section>
 
+<!-- acceso del autor -->
+<section class="velo" id="acceso" hidden aria-modal="true" role="dialog" aria-label="Acceso del autor">
+  <div class="velo-barra envoltura">
+    <button class="boton" id="ac-cerrar" type="button">← Volver</button>
+  </div>
+  <div class="envoltura"><div class="columna">
+    <form class="formulario" id="ac-form" autocomplete="off">
+      <p class="bio" style="margin:0">Para publicar, esta página usa una clave de GitHub que queda guardada solo en este navegador. Quien no la tenga, solo puede leer.</p>
+      <ol class="pasos">
+        <li>Abrí <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">crear una clave en GitHub</a>.</li>
+        <li>En <b>Repository access</b> elegí <b>Only select repositories</b> y marcá <b>kolo-deibe</b>.</li>
+        <li>En <b>Permissions</b> → <b>Contents</b>, poné <b>Read and write</b>.</li>
+        <li>Elegí cuánto dura, generala, copiala y pegala acá abajo.</li>
+      </ol>
+      <div class="campo">
+        <label for="ac-clave">Clave de GitHub</label>
+        <input class="entrada-texto" id="ac-clave" type="password" spellcheck="false" placeholder="github_pat_…">
+      </div>
+      <div class="acciones"><div class="grupo">
+        <button class="boton principal" id="ac-entrar" type="submit">Entrar</button>
+        <span class="dato" id="ac-estado" role="status"></span>
+      </div></div>
+    </form>
+  </div></div>
+</section>
+
 <div class="aviso" id="aviso" role="status" hidden></div>
 
 <script>
 (() => {
+  // Los escritos viven en este repo: datos/*.json y imagenes/. Leer es público; escribir pide una clave de GitHub.
+  const REPO = "kolujas/kolo-deibe";
+  const RAMA = "main";
+  const RAW = `https://raw.githubusercontent.com/${REPO}/${RAMA}/`;
+  const R_ESCRITOS = "datos/escritos.json", R_SITIO = "datos/sitio.json";
+
   const $ = (id) => document.getElementById(id);
   const PERFIL_DEF = { nombre: "Kolo Deibe", bio: $("bio").textContent, instagram: "" };
   const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 
-  let db = null, assets = null, puedeEscribir = false;
-  let escritos = [];             // [{id, ...data}]
+  /* ——— utilidades ——— */
+  const guardarLocal = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+  const leerLocal = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } };
+  const borrarLocal = (k) => { try { localStorage.removeItem(k); } catch {} };
+
+  let token = leerLocal("kolo-token");
+  let puedeEscribir = false;
+  let escritos = [];             // [{id, titulo, cuerpo, forma, etiquetas, imagen, fecha, editado}]
   let perfil = { ...PERFIL_DEF };
   let filtro = null;
   let abierto = null;            // id en lectura
-  let edicion = null;            // {id|null, forma, imagen}
+  let edicion = null;            // {id|null, forma, imagen, archivo}
   let cargado = false;
 
-  /* ——— utilidades ——— */
   const palabras = (t) => (t.trim().match(/\S+/g) || []).length;
   const minutos = (t) => Math.max(1, Math.round(palabras(t) / 200));
   const fecha = (ms) => { const d = new Date(ms); return `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`; };
   const idNuevo = () => "e-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 6);
-  const imgUrl = (img) => img ? (img.url || ("/_blob/" + img.id)) : null;
+  const ordenar = (l) => [...l].sort((a, b) => b.fecha - a.fecha);
+  // el autor ve las imágenes recién subidas antes de que GitHub Pages las publique
+  const imgUrl = (ruta) => ruta ? (puedeEscribir ? RAW + ruta : ruta) : null;
   let avisoT;
   function avisar(msg, error) {
     const a = $("aviso"); a.textContent = msg; a.classList.toggle("error", !!error); a.hidden = false;
-    clearTimeout(avisoT); avisoT = setTimeout(() => (a.hidden = true), 3200);
+    clearTimeout(avisoT); avisoT = setTimeout(() => (a.hidden = true), error ? 6000 : 4000);
   }
-  const guardarLocal = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
-  const leerLocal = (k) => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } };
-  const borrarLocal = (k) => { try { localStorage.removeItem(k); } catch {} };
+  function abrirVelo(id) { $(id).hidden = false; $(id).scrollTop = 0; document.body.style.overflow = "hidden"; }
+  function cerrarVelo(id) { $(id).hidden = true; document.body.style.overflow = ""; }
+
+  /* ——— GitHub ——— */
+  const aB64 = (bytes) => { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); };
+  const textoAB64 = (t) => aB64(new TextEncoder().encode(t));
+  const b64ATexto = (b) => new TextDecoder().decode(Uint8Array.from(atob(b.replace(/\s/g, "")), (c) => c.charCodeAt(0)));
+  const comoJson = (d) => textoAB64(JSON.stringify(d, null, 2) + "\n");
+
+  async function gh(ruta, opciones = {}, clave = token) {
+    const r = await fetch(`https://api.github.com/repos/${REPO}${ruta}`, {
+      cache: "no-store", ...opciones,
+      headers: { Accept: "application/vnd.github+json", Authorization: "Bearer " + clave, ...(opciones.body ? { "Content-Type": "application/json" } : {}) },
+    });
+    if (!r.ok) { const e = new Error("GitHub respondió " + r.status); e.status = r.status; throw e; }
+    return r.status === 204 ? null : r.json();
+  }
+  async function leerArchivo(ruta) {
+    try { const r = await gh(`/contents/${ruta}?ref=${RAMA}`); return { datos: JSON.parse(b64ATexto(r.content)), sha: r.sha }; }
+    catch (e) { if (e.status === 404) return { datos: null, sha: null }; throw e; }
+  }
+  const escribirArchivo = (ruta, b64, sha, mensaje) =>
+    gh(`/contents/${ruta}`, { method: "PUT", body: JSON.stringify({ message: mensaje, content: b64, branch: RAMA, ...(sha ? { sha } : {}) }) });
+  async function borrarArchivo(ruta, mensaje) {
+    try {
+      const r = await gh(`/contents/${ruta}?ref=${RAMA}`);
+      await gh(`/contents/${ruta}`, { method: "DELETE", body: JSON.stringify({ message: mensaje, sha: r.sha, branch: RAMA }) });
+    } catch {}
+  }
+  // lee la lista fresca, la cambia y la guarda; si cambió en el medio, reintenta una vez
+  async function cambiarEscritos(cambio, mensaje) {
+    for (let intento = 0; ; intento++) {
+      const { datos, sha } = await leerArchivo(R_ESCRITOS);
+      const lista = cambio(datos?.escritos ? [...datos.escritos] : []);
+      try { await escribirArchivo(R_ESCRITOS, comoJson({ escritos: lista }), sha, mensaje); return lista; }
+      catch (e) { if (intento === 0 && (e.status === 409 || e.status === 422)) continue; throw e; }
+    }
+  }
+  const mensajeError = (e) =>
+    e?.status === 401 ? "Tu clave de GitHub no es válida o venció. Tocá «Salir» y entrá con una nueva."
+    : e?.status === 403 || e?.status === 404 ? "Tu clave no puede escribir en el repo. Revisá que tenga Contents: Read and write sobre kolo-deibe."
+    : "No se pudo guardar. Revisá la conexión y probá de nuevo.";
+
+  async function achicar(archivo) {
+    const bmp = await createImageBitmap(archivo);
+    const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
+    const blob = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.86));
+    return new Uint8Array(await blob.arrayBuffer());
+  }
 
   /* ——— render ——— */
   function renderPerfil() {
@@ -319,6 +417,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
       firma.append(partes.slice(0, -1).join(" ") + " ");
       const em = document.createElement("em"); em.textContent = partes.at(-1); firma.append(em);
     } else firma.textContent = n;
+    document.title = n;
     $("bio").textContent = perfil.bio || "";
     const ig = $("link-ig");
     if (perfil.instagram) { ig.href = "https://www.instagram.com/" + encodeURIComponent(perfil.instagram) + "/"; ig.textContent = "@" + perfil.instagram; ig.hidden = false; }
@@ -359,11 +458,15 @@ button, input, textarea, select { font: inherit; color: inherit; }
       lista.append(li);
     }
 
-    const vacio = $("vacio");
-    vacio.hidden = visibles.length > 0;
+    $("vacio").hidden = visibles.length > 0;
     if (!cargado) { $("vacio-titulo").textContent = "Cargando los escritos…"; $("vacio-texto").textContent = "Cada texto aparece acá, del más reciente al más antiguo."; }
-    else if (puedeEscribir) { $("vacio-titulo").textContent = "La página está en blanco, esperando."; $("vacio-texto").textContent = "Tocá «Escribir» para publicar tu primer texto. Solo vos podés publicar; el resto lo lee."; }
+    else if (puedeEscribir) { $("vacio-titulo").textContent = "La página está en blanco, esperando."; $("vacio-texto").textContent = "Tocá «Escribir» para publicar tu primer texto."; }
     else { $("vacio-titulo").textContent = "Todavía no hay nada escrito acá."; $("vacio-texto").textContent = "Volvé pronto. Los textos aparecen apenas se publican."; }
+  }
+
+  function renderModo() {
+    $("barra-autor").hidden = !puedeEscribir;
+    $("acceso-link").hidden = puedeEscribir;
   }
 
   /* ——— lectura ——— */
@@ -383,13 +486,12 @@ button, input, textarea, select { font: inherit; color: inherit; }
     const et = $("lec-etiquetas"); et.textContent = "";
     for (const tag of e.etiquetas || []) { const s = document.createElement("span"); s.textContent = "#" + tag; et.append(s); }
     $("lec-editar").hidden = !puedeEscribir;
-    const v = $("lectura"); v.hidden = false; v.scrollTop = 0;
-    document.body.style.overflow = "hidden";
+    abrirVelo("lectura");
     if (location.hash !== "#" + id) history.replaceState(null, "", "#" + id);
     $("lec-cerrar").focus({ preventScroll: true });
   }
   function cerrarLectura() {
-    $("lectura").hidden = true; abierto = null; document.body.style.overflow = "";
+    cerrarVelo("lectura"); abierto = null;
     history.replaceState(null, "", location.pathname + location.search);
   }
   $("lec-cerrar").onclick = cerrarLectura;
@@ -407,11 +509,11 @@ button, input, textarea, select { font: inherit; color: inherit; }
   }
   document.querySelectorAll(".forma button").forEach((b) => (b.onclick = () => { setForma(b.dataset.forma); guardarBorrador(); }));
 
-  function setImagen(img) {
-    edicion.imagen = img;
-    const v = $("ed-vista"), u = imgUrl(img);
+  function setImagen(ruta) {
+    edicion.imagen = ruta; edicion.archivo = null;
+    const v = $("ed-vista"), u = imgUrl(ruta);
     if (u) { v.src = u; v.hidden = false; } else { v.removeAttribute("src"); v.hidden = true; }
-    $("ed-quitar-img").hidden = !img;
+    $("ed-quitar-img").hidden = !ruta;
     $("ed-imagen").value = "";
   }
 
@@ -419,7 +521,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 
   function abrirEditor(id) {
     const e = id ? escritos.find((x) => x.id === id) : null;
-    edicion = { id: e ? e.id : null, forma: "prosa", imagen: null };
+    edicion = { id: e ? e.id : null, forma: "prosa", imagen: null, archivo: null };
     const borrador = !e ? leerLocal("kolo-borrador") : null;
     const src = e || borrador || {};
     $("ed-titulo").value = src.titulo || "";
@@ -431,12 +533,11 @@ button, input, textarea, select { font: inherit; color: inherit; }
     $("ed-cerrar").textContent = e ? "← Salir sin guardar" : "← Salir (queda el borrador)";
     $("ed-zona-borrar").hidden = !e; $("ed-confirmar").hidden = true; $("ed-borrar").hidden = false;
     $("ed-estado").textContent = borrador && !e ? "borrador recuperado" : "";
-    $("ed-imagen").closest(".campo").hidden = !assets;
     contar();
-    $("editor").hidden = false; $("editor").scrollTop = 0; document.body.style.overflow = "hidden";
+    abrirVelo("editor");
     $("ed-titulo").focus();
   }
-  function cerrarEditor() { $("editor").hidden = true; edicion = null; document.body.style.overflow = ""; }
+  function cerrarEditor() { cerrarVelo("editor"); edicion = null; }
   $("ed-cerrar").onclick = cerrarEditor;
   $("btn-escribir").onclick = () => abrirEditor(null);
 
@@ -452,81 +553,137 @@ button, input, textarea, select { font: inherit; color: inherit; }
   ["ed-titulo", "ed-cuerpo", "ed-etiquetas"].forEach((id) => $(id).addEventListener("input", () => { contar(); guardarBorrador(); }));
   const leerEtiquetas = () => [...new Set($("ed-etiquetas").value.split(",").map((s) => s.trim().toLowerCase().replace(/^#/, "")).filter(Boolean))].slice(0, 8);
 
-  $("ed-imagen").onchange = async (ev) => {
-    const f = ev.target.files[0]; if (!f || !assets) return;
-    if (f.size > 20 * 1024 * 1024) { avisar("La imagen pesa más de 20 MB. Probá con una más liviana.", true); return; }
-    $("ed-estado").textContent = "subiendo imagen…"; $("ed-publicar").disabled = true;
-    try { const r = await assets.upload(f); setImagen({ id: r.id, url: r.url }); $("ed-estado").textContent = "imagen lista"; guardarBorrador(); }
-    catch (e) { avisar("No se pudo subir la imagen: " + (e?.message || "error desconocido"), true); $("ed-estado").textContent = ""; }
-    finally { $("ed-publicar").disabled = false; }
+  // la imagen se sube recién al publicar, así no quedan archivos sueltos en el repo
+  $("ed-imagen").onchange = (ev) => {
+    const f = ev.target.files[0]; if (!f || !edicion) return;
+    if (!f.type.startsWith("image/")) { avisar("Elegí un archivo de imagen.", true); return; }
+    edicion.archivo = f;
+    const v = $("ed-vista"); v.src = URL.createObjectURL(f); v.hidden = false;
+    $("ed-quitar-img").hidden = false;
   };
   $("ed-quitar-img").onclick = () => { setImagen(null); guardarBorrador(); };
 
   $("ed-form").onsubmit = async (ev) => {
-    ev.preventDefault(); if (!db || !edicion) return;
+    ev.preventDefault(); if (!puedeEscribir || !edicion) return;
     const titulo = $("ed-titulo").value.trim(), cuerpo = $("ed-cuerpo").value.replace(/\s+$/, "");
     if (!titulo || !cuerpo.trim()) { avisar("Falta el título o el texto.", true); return; }
     const previo = edicion.id ? escritos.find((x) => x.id === edicion.id) : null;
-    const datos = {
-      titulo, cuerpo, forma: edicion.forma, etiquetas: leerEtiquetas(), imagen: edicion.imagen || null,
-      fecha: previo ? previo.fecha : Date.now(), editado: previo ? Date.now() : null,
-    };
     const id = edicion.id || idNuevo();
-    const btn = $("ed-publicar"); btn.disabled = true; $("ed-estado").textContent = "publicando…";
+    const btn = $("ed-publicar"); btn.disabled = true;
     try {
-      await db.collection("escritos").doc(id).set(datos);
+      let imagen = edicion.imagen || null;
+      if (edicion.archivo) {
+        $("ed-estado").textContent = "subiendo imagen…";
+        const ruta = `imagenes/${id}-${Date.now().toString(36)}.jpg`;
+        await escribirArchivo(ruta, aB64(await achicar(edicion.archivo)), null, `Subir la imagen de «${titulo}»`);
+        imagen = ruta;
+      }
+      $("ed-estado").textContent = "publicando…";
+      const datos = {
+        id, titulo, cuerpo, forma: edicion.forma, etiquetas: leerEtiquetas(), imagen,
+        fecha: previo ? previo.fecha : Date.now(), editado: previo ? Date.now() : null,
+      };
+      const lista = await cambiarEscritos((l) => [datos, ...l.filter((x) => x.id !== id)], `${previo ? "Editar" : "Publicar"} «${titulo}»`);
+      if (previo?.imagen && previo.imagen !== imagen) await borrarArchivo(previo.imagen, `Quitar la imagen vieja de «${titulo}»`);
+      escritos = ordenar(lista); renderLista();
       if (!previo) borrarLocal("kolo-borrador");
-      cerrarEditor(); avisar(previo ? "Cambios guardados" : "Publicado");
+      cerrarEditor();
+      avisar((previo ? "Cambios guardados" : "Publicado") + ". Los lectores lo ven en un minuto.");
     } catch (e) {
       $("ed-estado").textContent = "";
-      avisar(e?.code === "invalid_argument" ? "No tenés permiso para publicar acá." : "No se pudo publicar. Probá de nuevo en un momento.", true);
+      avisar(mensajeError(e), true);
     } finally { btn.disabled = false; }
   };
 
   $("ed-borrar").onclick = () => { $("ed-confirmar").hidden = false; $("ed-borrar").hidden = true; };
   $("ed-borrar-no").onclick = () => { $("ed-confirmar").hidden = true; $("ed-borrar").hidden = false; };
   $("ed-borrar-si").onclick = async () => {
-    if (!edicion?.id) return;
-    try { await db.collection("escritos").doc(edicion.id).delete(); cerrarEditor(); avisar("Escrito borrado"); }
-    catch { avisar("No se pudo borrar. Probá de nuevo.", true); }
+    const previo = edicion?.id ? escritos.find((x) => x.id === edicion.id) : null;
+    if (!previo) return;
+    try {
+      const lista = await cambiarEscritos((l) => l.filter((x) => x.id !== previo.id), `Borrar «${previo.titulo}»`);
+      if (previo.imagen) await borrarArchivo(previo.imagen, `Quitar la imagen de «${previo.titulo}»`);
+      escritos = ordenar(lista); renderLista(); cerrarEditor(); avisar("Escrito borrado");
+    } catch (e) { avisar(mensajeError(e), true); }
   };
 
-  /* ——— perfil ——— */
+  /* ——— portada ——— */
   $("btn-perfil").onclick = () => {
     $("pf-nombre").value = perfil.nombre || ""; $("pf-bio").value = perfil.bio || ""; $("pf-ig").value = perfil.instagram || "";
-    $("perfil").hidden = false; document.body.style.overflow = "hidden"; $("pf-nombre").focus();
+    abrirVelo("perfil"); $("pf-nombre").focus();
   };
-  const cerrarPerfil = () => { $("perfil").hidden = true; document.body.style.overflow = ""; };
-  $("pf-cerrar").onclick = cerrarPerfil;
+  $("pf-cerrar").onclick = () => cerrarVelo("perfil");
   $("pf-form").onsubmit = async (ev) => {
-    ev.preventDefault(); if (!db) return;
+    ev.preventDefault(); if (!puedeEscribir) return;
     const datos = { nombre: $("pf-nombre").value.trim() || PERFIL_DEF.nombre, bio: $("pf-bio").value.trim(), instagram: $("pf-ig").value.trim().replace(/^@/, "") };
-    try { await db.doc("sitio/perfil").set(datos); cerrarPerfil(); avisar("Portada guardada"); }
-    catch { avisar("No se pudo guardar la portada.", true); }
+    const btn = $("pf-guardar"); btn.disabled = true;
+    try {
+      const { sha } = await leerArchivo(R_SITIO);
+      await escribirArchivo(R_SITIO, comoJson(datos), sha, "Cambiar la portada");
+      perfil = { ...PERFIL_DEF, ...datos }; renderPerfil(); cerrarVelo("perfil"); avisar("Portada guardada");
+    } catch (e) { avisar(mensajeError(e), true); }
+    finally { btn.disabled = false; }
+  };
+
+  /* ——— acceso del autor ——— */
+  async function verificar(clave) {
+    try { const r = await gh("", {}, clave); return r.permissions?.push ? "ok" : "sin-permiso"; }
+    catch (e) { return e.status === 401 || e.status === 403 || e.status === 404 ? "invalida" : "sin-red"; }
+  }
+  $("acceso-link").onclick = () => { $("ac-clave").value = ""; $("ac-estado").textContent = ""; abrirVelo("acceso"); $("ac-clave").focus(); };
+  $("ac-cerrar").onclick = () => cerrarVelo("acceso");
+  $("ac-form").onsubmit = async (ev) => {
+    ev.preventDefault();
+    const clave = $("ac-clave").value.trim(); if (!clave) return;
+    const btn = $("ac-entrar"); btn.disabled = true; $("ac-estado").textContent = "verificando…";
+    const r = await verificar(clave);
+    btn.disabled = false;
+    if (r !== "ok") {
+      $("ac-estado").textContent = { "sin-permiso": "Esa clave no tiene permiso para escribir en kolo-deibe.", invalida: "GitHub no reconoce esa clave. Copiala de nuevo, completa.", "sin-red": "No se pudo hablar con GitHub. Revisá la conexión." }[r];
+      return;
+    }
+    token = clave; guardarLocal("kolo-token", clave); puedeEscribir = true;
+    cerrarVelo("acceso"); renderModo(); avisar("Listo, ya podés escribir");
+    await cargar();
+  };
+  $("btn-salir").onclick = () => {
+    token = null; borrarLocal("kolo-token"); puedeEscribir = false;
+    renderModo(); renderLista(); avisar("Saliste. En este navegador ya no se puede publicar.");
   };
 
   document.addEventListener("keydown", (ev) => {
     if (ev.key !== "Escape") return;
-    if (!$("lectura").hidden) cerrarLectura(); else if (!$("perfil").hidden) cerrarPerfil();
+    if (!$("lectura").hidden) cerrarLectura();
+    else if (!$("perfil").hidden) cerrarVelo("perfil");
+    else if (!$("acceso").hidden) cerrarVelo("acceso");
   });
 
   /* ——— datos ——— */
-  renderPerfil(); renderLista();
+  async function cargar() {
+    let sitio = null, lista = null;
+    if (puedeEscribir) {
+      try { [sitio, lista] = (await Promise.all([leerArchivo(R_SITIO), leerArchivo(R_ESCRITOS)])).map((x) => x.datos); }
+      catch (e) { avisar(mensajeError(e), true); }
+    } else {
+      const traer = (r) => fetch(r + "?v=" + Date.now(), { cache: "no-store" }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+      [sitio, lista] = await Promise.all([traer(R_SITIO), traer(R_ESCRITOS)]);
+    }
+    perfil = { ...PERFIL_DEF, ...(sitio || {}) };
+    escritos = ordenar(lista?.escritos || []);
+    const primera = !cargado; cargado = true;
+    renderPerfil(); renderLista();
+    if (primera) { const h = location.hash.slice(1); if (h && escritos.some((e) => e.id === h)) abrir(h); }
+  }
+
   (async () => {
-    const c = window.claude;
-    if (!c?.use) { cargado = true; renderLista(); return; }
-    const [d, u, a] = await Promise.all([c.use("db"), c.use("user"), c.use("assets")]);
-    db = d; assets = a;
-    puedeEscribir = !!(u && (u.canEdit?.() || u.isOwner?.())) && !!db;
-    $("barra-autor").hidden = !puedeEscribir;
-    if (!db) { cargado = true; renderLista(); return; }
-    db.doc("sitio/perfil").onSnapshot((s) => { perfil = s.exists ? { ...PERFIL_DEF, ...s.data() } : { ...PERFIL_DEF }; renderPerfil(); }, () => {});
-    db.collection("escritos").orderBy("fecha", "desc").onSnapshot((snap) => {
-      escritos = snap.docs.map((x) => ({ id: x.id, ...x.data() }));
-      const primera = !cargado; cargado = true; renderLista();
-      if (primera) { const h = location.hash.slice(1); if (h && escritos.some((e) => e.id === h)) abrir(h); }
-      else if (abierto && !escritos.some((e) => e.id === abierto)) cerrarLectura();
-    }, () => { cargado = true; renderLista(); });
+    renderPerfil(); renderLista();
+    if (token) {
+      const r = await verificar(token);
+      puedeEscribir = r === "ok";
+      if (r === "invalida" || r === "sin-permiso") { token = null; borrarLocal("kolo-token"); }
+    }
+    renderModo();
+    await cargar();
   })();
 
   /* ——— cielo: luna, niebla y reflejo ——— */
@@ -536,7 +693,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
   function medir() {
     const r = cv.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
     W = r.width; H = r.height; cv.width = W * dpr; cv.height = H * dpr; cx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    bancos = Array.from({ length: 9 }, (_, i) => ({ x: Math.random() * W, y: H * (0.35 + Math.random() * 0.6), r: 120 + Math.random() * 220, v: 0.05 + Math.random() * 0.12, a: 0.035 + Math.random() * 0.05 }));
+    bancos = Array.from({ length: 9 }, () => ({ x: Math.random() * W, y: H * (0.35 + Math.random() * 0.6), r: 120 + Math.random() * 220, v: 0.05 + Math.random() * 0.12, a: 0.035 + Math.random() * 0.05 }));
   }
   function dibujar(t) {
     cx.fillStyle = "#07090c"; cx.fillRect(0, 0, W, H);

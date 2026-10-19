@@ -2,7 +2,7 @@
 
 Sitio para publicar mis escritos: textos oscuros, viscerales, cargados de introspección.
 
-Todo vive en un solo archivo, [index.html](index.html), sin dependencias ni build.
+Se publica en **https://kolujas.github.io/kolo-deibe/** con GitHub Pages. No tiene build ni dependencias.
 
 ## Qué tiene
 
@@ -12,12 +12,21 @@ Todo vive en un solo archivo, [index.html](index.html), sin dependencias ni buil
 - Dos formas de texto: **prosa** (párrafos con sangría y letra capital) y **verso** (respeta los saltos de línea).
 - Editor con borrador local, etiquetas e imagen de portada opcional.
 
-## Dónde se guardan los escritos
+## Dónde está cada cosa
 
-Hoy la página corre como Artifact de claude.ai y guarda los escritos y la portada en su base de datos
-(`window.claude.use("db")`), y las imágenes en su almacén de archivos (`use("assets")`).
-Solo el dueño puede publicar; el resto lee.
+| Archivo | Qué guarda |
+| --- | --- |
+| `index.html` | La página entera: estilos, lectura y editor. |
+| `datos/escritos.json` | Todos los escritos. |
+| `datos/sitio.json` | Nombre, presentación e Instagram de la portada. |
+| `imagenes/` | Las imágenes de portada, achicadas a 1600 px. |
 
-Si se abre `index.html` fuera de claude.ai, la página se ve igual pero no tiene de dónde leer escritos
-ni dónde guardarlos. Para publicarla por su cuenta (por ejemplo en GitHub Pages) hace falta cambiar esa
-capa por otro backend.
+## Cómo se publica
+
+Cualquiera puede leer. Para escribir, abajo de todo está **Acceso del autor**: ahí se pega una clave de
+GitHub (fine-grained token) con permiso **Contents: Read and write** solo sobre este repo. La clave queda
+guardada en ese navegador y nada más.
+
+Cada vez que publicás, editás o borrás, la página hace un commit en `main` con la API de GitHub, y
+GitHub Pages lo muestra a los lectores en alrededor de un minuto. También se puede editar a mano
+`datos/escritos.json` y hacer push.
