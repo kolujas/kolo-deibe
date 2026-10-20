@@ -1,6 +1,20 @@
 {
   "escritos": [
     {
+      "id": "e-mvgirc0w-66b4",
+      "titulo": "Encadenado",
+      "cuerpo": "Tormenta de desolación\nEncadenado a su propia indecisión\nEl silencio le devoró la voz\n\nSiempre abrazó un mundo ajeno\nAtrapado en la misma devastación\n\nInternado en un lecho de escombros\nQue martirizan su corazón\n\nSus gritos desolados\nfueron su propia reivindicación\n\n— Abril, 2026",
+      "forma": "verso",
+      "etiquetas": [
+        "desolación",
+        "silencio",
+        "reivindicación"
+      ],
+      "imagen": null,
+      "fecha": 1792490829728,
+      "editado": 1792491180449
+    },
+    {
       "id": "e-mvgipcaq-jdyq",
       "titulo": "Ambivalencia",
       "cuerpo": "Él siempre dudaba.\n\n¿La soledad es ese lugar frío donde el calor se congeló?\n\nQuizás fue el miedo de encontrarse cara a cara consigo mismo y ver cómo se marchitaba todo por dentro.\n\n¿Castigo o redención?\n\n¿Será la lucha contra su ambigüedad?\n\nMirar a través, donde nadie puede tocarlo.\n\nSu propio hielo puede destruirlo por dentro.\n\n¿O el fuego de su corazón incinerar sus propias sombras?\n\n— Abril, 2026",
@@ -26,16 +40,6 @@
       ],
       "imagen": "imagenes/e-mvgiv451-sivj-mvgiv451.jpg",
       "fecha": 1792491009309,
-      "editado": null
-    },
-    {
-      "id": "e-mvgirc0w-66b4",
-      "titulo": "Encadenado",
-      "cuerpo": "Tormenta de desolación\nEncadenado a su propia indecisión\nEl silencio le devoró la voz\n\nSiempre abrazó un mundo ajeno\nAtrapado en la misma devastación\n\nInternado en un lecho de escombros\nQue martirizan su corazón\n\nSus gritos desolados\nfueron su propia reivindicación\n\n— Abril, 2026",
-      "forma": "verso",
-      "etiquetas": [],
-      "imagen": null,
-      "fecha": 1792490829728,
       "editado": null
     },
     {
